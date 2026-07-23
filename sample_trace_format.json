@@ -1,0 +1,49 @@
+{
+  "name": "trace_log トレース (サンプル)",
+  "endian": "little",
+  "record_size": 12,
+  "header_bytes": 0,
+
+  "timestamp": { "field": "timestamp", "unit": "us", "epoch": "relative", "wrap_bits": 32 },
+  "id":        { "field": "id" },
+  "data_field": "data",
+  "lane":      { "field": "task" },
+
+  "fields": [
+    { "name": "timestamp", "type": "uint32" },
+    { "name": "id",        "type": "uint16" },
+    { "name": "task",      "type": "uint8",
+      "map": { "0": "ISR", "1": "CtrlTask", "2": "CommTask", "3": "LogTask" } },
+    { "type": "pad", "length": 1 },
+    { "name": "data",      "type": "uint32" }
+  ],
+
+  "ids": {
+    "1":   { "name": "SYS_START",  "text": "システム起動 (FW ver {data})",
+             "data": { "display": "hex" }, "level": "info" },
+    "2":   { "name": "STATE",      "text": "状態遷移 → {data}",
+             "data": { "map": { "0": "INIT", "1": "IDLE", "2": "RUN", "3": "FAULT" } },
+             "level": "info" },
+    "10":  { "name": "CTRL_CYCLE", "text": "制御周期開始 seq={data}", "level": "debug" },
+    "11":  { "name": "MOTOR_SET",  "text": "モータ出力 {data}",
+             "data": { "type": "int32", "scale": 0.1, "unit": "%" }, "level": "info" },
+    "12":  { "name": "ADC_TEMP",   "text": "温度 {data}",
+             "data": { "scale": 0.01, "unit": "°C" }, "level": "debug" },
+    "20":  { "name": "CAN_TX",     "text": "CAN送信 id={data}",
+             "data": { "display": "hex" }, "level": "debug" },
+    "21":  { "name": "CAN_RX",     "text": "CAN受信 id={data}",
+             "data": { "display": "hex" }, "level": "debug" },
+    "22":  { "name": "CAN_TIMEOUT","text": "CAN応答タイムアウト (id={data})",
+             "data": { "display": "hex" }, "level": "warn" },
+    "30":  { "name": "BUF_USAGE",  "text": "バッファ使用率 {data}",
+             "data": { "unit": "%" }, "level": "debug" },
+    "31":  { "name": "BUF_HIGH",   "text": "バッファ高水位 {data}",
+             "data": { "unit": "%" }, "level": "warn" },
+    "90":  { "name": "ERR",        "text": "エラー {data}",
+             "data": { "map": { "257": "E_TIMEOUT", "258": "E_CRC", "515": "E_OVERRUN" },
+                       "map_default": "E_UNKNOWN({value})" },
+             "level": "error" },
+
+    "default": { "name": "TRACE", "text": "data={data}", "level": "debug" }
+  }
+}

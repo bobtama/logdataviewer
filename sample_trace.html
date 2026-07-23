@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>trace_log トレース (サンプル) — Trace Log</title>
+<style>
+  :root{
+    --paper:#eef1f4; --panel:#fff; --ink:#1b2733; --ink2:#5a6b7b;
+    --grid:#d9dfe5; --lane:#e4e9ee;
+    --mono:"SFMono-Regular","Consolas","BIZ UDGothic","Menlo",monospace;
+    --sans:"Segoe UI","Hiragino Sans","Yu Gothic UI",system-ui,sans-serif;
+    --gut:185px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:14px}
+  header{background:var(--ink);color:#e8eef4;padding:18px 26px 14px;
+         background-image:repeating-linear-gradient(90deg,transparent 0 118px,rgba(255,255,255,.05) 118px 120px)}
+  header h1{margin:0;font-size:20px;font-weight:600;letter-spacing:.03em}
+  header .sub{font-family:var(--mono);font-size:12px;color:#9fb3c6;margin-top:5px}
+  main{max-width:1280px;margin:0 auto;padding:14px 22px 60px}
+
+  .toolbar{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;position:sticky;top:0;z-index:6;
+           background:var(--panel);border:1px solid var(--grid);padding:10px 14px;margin-bottom:10px;
+           box-shadow:0 2px 6px rgba(27,39,51,.08)}
+  .chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--grid);
+        padding:3px 10px;cursor:pointer;user-select:none;background:var(--paper);
+        font-size:12px;border-radius:2px}
+  .chip .n{font-family:var(--mono);color:var(--ink2)}
+  .chip.off{opacity:.35}
+  .toolbar input[type=search]{padding:6px 10px;border:1px solid var(--grid);
+        font-family:var(--mono);font-size:13px;min-width:190px}
+  .toolbar label{font-size:12px;color:var(--ink2);display:inline-flex;gap:6px;align-items:center}
+  .toolbar select{padding:4px 6px;border:1px solid var(--grid);background:#fff;font-size:12px}
+  .toolbar .cnt{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--ink2)}
+
+  details.idsum{margin-bottom:10px;border:1px solid var(--grid);background:var(--panel)}
+  details.idsum summary{padding:7px 14px;font-size:12px;color:var(--ink2);cursor:pointer;user-select:none}
+  .idgrid{display:flex;flex-wrap:wrap;gap:6px;padding:0 14px 12px}
+  .idgrid .chip{font-family:var(--mono)}
+  .idgrid .more{font-size:11px;color:var(--ink2);align-self:center}
+  .lv{display:inline-block;width:8px;height:8px;border-radius:50%}
+
+  .tl{background:var(--panel);border:1px solid var(--grid)}
+  .lanehead{display:grid;position:sticky;top:56px;z-index:5;background:var(--ink);color:#e8eef4}
+  .lanehead div{padding:8px 10px;font-size:12px;font-weight:600;letter-spacing:.05em;
+                overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center}
+  .lanehead div:first-child{text-align:left;font-family:var(--mono);color:#9fb3c6;font-weight:400}
+  #tlBody{position:relative;overflow:hidden}
+  .row{position:absolute;left:0;right:0;display:grid;align-items:center;height:26px}
+  .gut{padding:0 12px 0 10px;text-align:right;font-family:var(--mono);
+       font-size:11px;color:var(--ink2);line-height:1.15;border-right:1px solid var(--grid);
+       height:100%;display:flex;flex-direction:column;justify-content:center}
+  .gut .abs{color:var(--ink);white-space:nowrap;overflow:hidden}
+  .gut .dlt{font-size:10px;color:#8b9aa8;white-space:nowrap;overflow:hidden}
+  .cell{padding:0 6px;min-width:0;text-align:center}
+  .evt{display:inline-block;max-width:100%;border:1px solid var(--grid);border-left-width:4px;
+       background:#fff;padding:2px 9px;font-size:12px;cursor:pointer;border-radius:2px;
+       box-shadow:0 1px 0 rgba(27,39,51,.06);
+       white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
+  .evt:hover{background:#f0f6fd}
+  .evt.sel{outline:2px solid var(--ink)}
+  .evt.lv-warn{background:#fff8ef}
+  .evt.lv-error{background:#fdf1f3}
+  .evt .nm{font-weight:600;letter-spacing:.02em;font-family:var(--mono);font-size:11px}
+  .evt .msg{margin-left:7px}
+  .break{position:absolute;left:0;right:0;display:flex;align-items:center;gap:12px;color:var(--ink2);
+         font-family:var(--mono);font-size:11px;padding-right:14px;height:24px}
+  .break::before{content:"";width:calc(var(--gut) - 14px);flex:none}
+  .break .line{flex:1;border-top:2px dashed #b6c1cb}
+  .break .lbl{flex:none;background:var(--paper);border:1px solid var(--grid);
+              padding:2px 10px;border-radius:10px}
+  #dpanel{position:fixed;right:18px;bottom:18px;width:min(440px,92vw);max-height:46vh;
+          overflow:auto;background:#fff;border:1px solid var(--ink);z-index:20;display:none;
+          box-shadow:0 8px 28px rgba(27,39,51,.28)}
+  #dpanel .hd{display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;
+              background:var(--ink);color:#e8eef4;padding:6px 12px;font-size:12px}
+  #dpanel .hd button{background:none;border:none;color:#e8eef4;font-size:15px;cursor:pointer;padding:0 2px}
+  #dpanel .bd{padding:8px 12px;font-family:var(--mono);font-size:12px}
+  #dpanel table{border-collapse:collapse}
+  #dpanel td{padding:2px 14px 2px 0;vertical-align:top}
+  #dpanel td:first-child{color:var(--ink2)}
+  .notice{padding:8px 14px;font-size:12px;color:#c25e00;
+          background:#fff7ef;border:1px solid #f0d9bf;margin-bottom:10px}
+  footer{max-width:1280px;margin:0 auto;padding:8px 22px 30px;color:var(--ink2);
+         font-size:11px;font-family:var(--mono)}
+  @media (max-width:700px){ :root{--gut:105px} .gut{font-size:10px} }
+</style>
+</head>
+<body>
+<header>
+  <h1>trace_log トレース (サンプル)</h1>
+  <div class="sub" id="hMeta"></div>
+</header>
+<main>
+  <div id="notices"></div>
+  <div class="toolbar">
+    <span id="laneChips"></span>
+    <label>レベル
+      <select id="lvSel">
+        <option value="0" selected>すべて</option>
+        <option value="1">info 以上</option>
+        <option value="2">warn 以上</option>
+        <option value="3">error のみ</option>
+      </select>
+    </label>
+    <input type="search" id="q" placeholder="ID名・メッセージ検索…">
+    <label>間隔
+      <select id="mode">
+        <option value="prop" selected>時間比例 (log)</option>
+        <option value="uniform">等間隔</option>
+      </select>
+    </label>
+    <label>省略線
+      <select id="breakF">
+        <option value="10">×10</option>
+        <option value="100">×100</option>
+        <option value="1000" selected>×1000</option>
+        <option value="0">なし</option>
+      </select>
+    </label>
+    <label>倍率
+      <input type="range" id="zoom" min="4" max="40" value="14" style="width:100px">
+    </label>
+    <span class="cnt" id="cnt"></span>
+  </div>
+  <details class="idsum"><summary>ID 別件数(クリックで絞り込み)</summary>
+    <div class="idgrid" id="idGrid"></div>
+  </details>
+  <div class="tl">
+    <div class="lanehead" id="laneHead"></div>
+    <div id="tlBody"></div>
+  </div>
+</main>
+<div id="dpanel">
+  <div class="hd"><span id="dpTitle"></span><button id="dpClose" title="閉じる">×</button></div>
+  <div class="bd" id="dpBody"></div>
+</div>
+<footer id="foot"></footer>
+
+<script id="logdata" type="application/json">{"title": "trace_log トレース (サンプル)", "meta": {"file": "sample_trace.log", "format_file": "sample_trace_format.json", "size_bytes": 4668, "record_size": 12, "remainder": 0, "order_warn": false, "generated": "2026-07-21 00:25:14"}, "epoch": "relative", "t0Sec": 4254, "t0Nsec": 967296000, "ids": [{"key": "1", "name": "SYS_START", "level": "info", "color": "#3a6ea5"}, {"key": "2", "name": "STATE", "level": "info", "color": "#3a6ea5"}, {"key": "10", "name": "CTRL_CYCLE", "level": "debug", "color": "#7a8792"}, {"key": "11", "name": "MOTOR_SET", "level": "info", "color": "#3a6ea5"}, {"key": "12", "name": "ADC_TEMP", "level": "debug", "color": "#7a8792"}, {"key": "20", "name": "CAN_TX", "level": "debug", "color": "#7a8792"}, {"key": "21", "name": "CAN_RX", "level": "debug", "color": "#7a8792"}, {"key": "22", "name": "CAN_TIMEOUT", "level": "warn", "color": "#c25e00"}, {"key": "30", "name": "BUF_USAGE", "level": "debug", "color": "#7a8792"}, {"key": "31", "name": "BUF_HIGH", "level": "warn", "color": "#c25e00"}, {"key": "90", "name": "ERR", "level": "error", "color": "#c22f4f"}], "events": [{"n": 1, "t": 0, "ii": 0, "lane": "CtrlTask", "msg": "システム起動 (FW ver 0x10203)", "d": {"data": [66051, "0x10203"], "task": [1, "CtrlTask"]}}, {"n": 2, "t": 1500000, "ii": 1, "lane": "CtrlTask", "msg": "状態遷移 → IDLE", "d": {"data": [1, "IDLE"], "task": [1, "CtrlTask"]}}, {"n": 3, "t": 1038677000, "ii": 1, "lane": "CtrlTask", "msg": "状態遷移 → RUN", "d": {"data": [2, "RUN"], "task": [1, "CtrlTask"]}}, {"n": 4, "t": 1039450000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=1", "d": {"data": [1, 1], "task": [1, "CtrlTask"]}}, {"n": 5, "t": 1039537000, "ii": 4, "lane": "CtrlTask", "msg": "温度 65.17 °C", "d": {"data": [65.17, 65.17], "task": [1, "CtrlTask"]}}, {"n": 6, "t": 1039611000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 40.2 %", "d": {"data": [40.2, 40.2], "task": [1, "CtrlTask"]}}, {"n": 7, "t": 1039709000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [2, "CommTask"]}}, {"n": 8, "t": 1040316000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [0, "ISR"]}}, {"n": 9, "t": 1041601000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=2", "d": {"data": [2, 2], "task": [1, "CtrlTask"]}}, {"n": 10, "t": 1041642000, "ii": 4, "lane": "CtrlTask", "msg": "温度 65.04 °C", "d": {"data": [65.04, 65.04], "task": [1, "CtrlTask"]}}, {"n": 11, "t": 1041700000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 1.1 %", "d": {"data": [1.1, 1.1], "task": [1, "CtrlTask"]}}, {"n": 12, "t": 1041996000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [2, "CommTask"]}}, {"n": 13, "t": 1042746000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [0, "ISR"]}}, {"n": 14, "t": 1044094000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=3", "d": {"data": [3, 3], "task": [1, "CtrlTask"]}}, {"n": 15, "t": 1044131000, "ii": 4, "lane": "CtrlTask", "msg": "温度 64.91 °C", "d": {"data": [64.91, 64.91], "task": [1, "CtrlTask"]}}, {"n": 16, "t": 1044163000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -30.5 %", "d": {"data": [-30.5, -30.5], "task": [1, "CtrlTask"]}}, {"n": 17, "t": 1044366000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x1A0", "d": {"data": [416, "0x1A0"], "task": [2, "CommTask"]}}, {"n": 18, "t": 1044820000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x1A0", "d": {"data": [416, "0x1A0"], "task": [0, "ISR"]}}, {"n": 19, "t": 1045020000, "ii": 9, "lane": "LogTask", "msg": "バッファ高水位 86 %", "d": {"data": [86, 86], "task": [3, "LogTask"]}}, {"n": 20, "t": 1046910000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=4", "d": {"data": [4, 4], "task": [1, "CtrlTask"]}}, {"n": 21, "t": 1046940000, "ii": 4, "lane": "CtrlTask", "msg": "温度 64.81 °C", "d": {"data": [64.81, 64.81], "task": [1, "CtrlTask"]}}, {"n": 22, "t": 1046989000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 54.1 %", "d": {"data": [54.1, 54.1], "task": [1, "CtrlTask"]}}, {"n": 23, "t": 1047110000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [2, "CommTask"]}}, {"n": 24, "t": 1047315000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [0, "ISR"]}}, {"n": 25, "t": 1048436000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=5", "d": {"data": [5, 5], "task": [1, "CtrlTask"]}}, {"n": 26, "t": 1048474000, "ii": 4, "lane": "CtrlTask", "msg": "温度 64.72 °C", "d": {"data": [64.72, 64.72], "task": [1, "CtrlTask"]}}, {"n": 27, "t": 1048519000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -58.0 %", "d": {"data": [-58.0, -58.0], "task": [1, "CtrlTask"]}}, {"n": 28, "t": 1048785000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x101", "d": {"data": [257, "0x101"], "task": [2, "CommTask"]}}, {"n": 29, "t": 1048922000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x101", "d": {"data": [257, "0x101"], "task": [0, "ISR"]}}, {"n": 30, "t": 1049022000, "ii": 8, "lane": "LogTask", "msg": "バッファ使用率 47 %", "d": {"data": [47, 47], "task": [3, "LogTask"]}}, {"n": 31, "t": 1050075000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=6", "d": {"data": [6, 6], "task": [1, "CtrlTask"]}}, {"n": 32, "t": 1050165000, "ii": 4, "lane": "CtrlTask", "msg": "温度 64.81 °C", "d": {"data": [64.81, 64.81], "task": [1, "CtrlTask"]}}, {"n": 33, "t": 1050230000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 1.3 %", "d": {"data": [1.3, 1.3], "task": [1, "CtrlTask"]}}, {"n": 34, "t": 1050387000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [2, "CommTask"]}}, {"n": 35, "t": 1050710000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [0, "ISR"]}}, {"n": 36, "t": 1050948000, "ii": 8, "lane": "LogTask", "msg": "バッファ使用率 63 %", "d": {"data": [63, 63], "task": [3, "LogTask"]}}, {"n": 37, "t": 1051851000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=7", "d": {"data": [7, 7], "task": [1, "CtrlTask"]}}, {"n": 38, "t": 1051933000, "ii": 4, "lane": "CtrlTask", "msg": "温度 64.73 °C", "d": {"data": [64.73, 64.73], "task": [1, "CtrlTask"]}}, {"n": 39, "t": 1051961000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -29.6 %", "d": {"data": [-29.6, -29.6], "task": [1, "CtrlTask"]}}, {"n": 40, "t": 1052191000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x101", "d": {"data": [257, "0x101"], "task": [2, "CommTask"]}}, {"n": 41, "t": 1052787000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x101", "d": {"data": [257, "0x101"], "task": [0, "ISR"]}}, {"n": 42, "t": 1052977000, "ii": 9, "lane": "LogTask", "msg": "バッファ高水位 91 %", "d": {"data": [91, 91], "task": [3, "LogTask"]}}, {"n": 43, "t": 1054262000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=8", "d": {"data": [8, 8], "task": [1, "CtrlTask"]}}, {"n": 44, "t": 1054308000, "ii": 4, "lane": "CtrlTask", "msg": "温度 64.84 °C", "d": {"data": [64.84, 64.84], "task": [1, "CtrlTask"]}}, {"n": 45, "t": 1054369000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -1.5 %", "d": {"data": [-1.5, -1.5], "task": [1, "CtrlTask"]}}, {"n": 46, "t": 1054448000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x101", "d": {"data": [257, "0x101"], "task": [2, "CommTask"]}}, {"n": 47, "t": 1054568000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x101", "d": {"data": [257, "0x101"], "task": [0, "ISR"]}}, {"n": 48, "t": 1055811000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=9", "d": {"data": [9, 9], "task": [1, "CtrlTask"]}}, {"n": 49, "t": 1055867000, "ii": 4, "lane": "CtrlTask", "msg": "温度 64.8 °C", "d": {"data": [64.8, 64.8], "task": [1, "CtrlTask"]}}, {"n": 50, "t": 1055912000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 43.2 %", "d": {"data": [43.2, 43.2], "task": [1, "CtrlTask"]}}, {"n": 51, "t": 1056126000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x101", "d": {"data": [257, "0x101"], "task": [2, "CommTask"]}}, {"n": 52, "t": 1056395000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x101", "d": {"data": [257, "0x101"], "task": [0, "ISR"]}}, {"n": 53, "t": 1058100000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=10", "d": {"data": [10, 10], "task": [1, "CtrlTask"]}}, {"n": 54, "t": 1058167000, "ii": 4, "lane": "CtrlTask", "msg": "温度 64.89 °C", "d": {"data": [64.89, 64.89], "task": [1, "CtrlTask"]}}, {"n": 55, "t": 1058191000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -64.8 %", "d": {"data": [-64.8, -64.8], "task": [1, "CtrlTask"]}}, {"n": 56, "t": 1058264000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [2, "CommTask"]}}, {"n": 57, "t": 1058632000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [0, "ISR"]}}, {"n": 58, "t": 1059980000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=11", "d": {"data": [11, 11], "task": [1, "CtrlTask"]}}, {"n": 59, "t": 1060085000, "ii": 4, "lane": "CtrlTask", "msg": "温度 65.04 °C", "d": {"data": [65.04, 65.04], "task": [1, "CtrlTask"]}}, {"n": 60, "t": 1060158000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 37.6 %", "d": {"data": [37.6, 37.6], "task": [1, "CtrlTask"]}}, {"n": 61, "t": 1061678000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=12", "d": {"data": [12, 12], "task": [1, "CtrlTask"]}}, {"n": 62, "t": 1061737000, "ii": 4, "lane": "CtrlTask", "msg": "温度 65.04 °C", "d": {"data": [65.04, 65.04], "task": [1, "CtrlTask"]}}, {"n": 63, "t": 1061803000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -41.2 %", "d": {"data": [-41.2, -41.2], "task": [1, "CtrlTask"]}}, {"n": 64, "t": 1061893000, "ii": 9, "lane": "LogTask", "msg": "バッファ高水位 90 %", "d": {"data": [90, 90], "task": [3, "LogTask"]}}, {"n": 65, "t": 1063760000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=13", "d": {"data": [13, 13], "task": [1, "CtrlTask"]}}, {"n": 66, "t": 1063867000, "ii": 4, "lane": "CtrlTask", "msg": "温度 64.94 °C", "d": {"data": [64.94, 64.94], "task": [1, "CtrlTask"]}}, {"n": 67, "t": 1063913000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -70.3 %", "d": {"data": [-70.3, -70.3], "task": [1, "CtrlTask"]}}, {"n": 68, "t": 1063989000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [2, "CommTask"]}}, {"n": 69, "t": 1064370000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [0, "ISR"]}}, {"n": 70, "t": 1067316000, "ii": 1, "lane": "CtrlTask", "msg": "状態遷移 → IDLE", "d": {"data": [1, "IDLE"], "task": [1, "CtrlTask"]}}, {"n": 71, "t": 17067316000, "ii": 1, "lane": "CtrlTask", "msg": "状態遷移 → RUN", "d": {"data": [2, "RUN"], "task": [1, "CtrlTask"]}}, {"n": 72, "t": 17067816000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=14", "d": {"data": [14, 14], "task": [1, "CtrlTask"]}}, {"n": 73, "t": 17067868000, "ii": 4, "lane": "CtrlTask", "msg": "温度 64.83 °C", "d": {"data": [64.83, 64.83], "task": [1, "CtrlTask"]}}, {"n": 74, "t": 17067896000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -33.3 %", "d": {"data": [-33.3, -33.3], "task": [1, "CtrlTask"]}}, {"n": 75, "t": 17068068000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [2, "CommTask"]}}, {"n": 76, "t": 17068817000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [0, "ISR"]}}, {"n": 77, "t": 17069966000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=15", "d": {"data": [15, 15], "task": [1, "CtrlTask"]}}, {"n": 78, "t": 17070030000, "ii": 4, "lane": "CtrlTask", "msg": "温度 64.94 °C", "d": {"data": [64.94, 64.94], "task": [1, "CtrlTask"]}}, {"n": 79, "t": 17070078000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -29.0 %", "d": {"data": [-29.0, -29.0], "task": [1, "CtrlTask"]}}, {"n": 80, "t": 17070143000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x1A0", "d": {"data": [416, "0x1A0"], "task": [2, "CommTask"]}}, {"n": 81, "t": 17070640000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x1A0", "d": {"data": [416, "0x1A0"], "task": [0, "ISR"]}}, {"n": 82, "t": 17072529000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=16", "d": {"data": [16, 16], "task": [1, "CtrlTask"]}}, {"n": 83, "t": 17072601000, "ii": 4, "lane": "CtrlTask", "msg": "温度 65.12 °C", "d": {"data": [65.12, 65.12], "task": [1, "CtrlTask"]}}, {"n": 84, "t": 17072658000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -51.3 %", "d": {"data": [-51.3, -51.3], "task": [1, "CtrlTask"]}}, {"n": 85, "t": 17072859000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x101", "d": {"data": [257, "0x101"], "task": [2, "CommTask"]}}, {"n": 86, "t": 17080019000, "ii": 7, "lane": "CommTask", "msg": "CAN応答タイムアウト (id=0x101)", "d": {"data": [257, "0x101"], "task": [2, "CommTask"]}}, {"n": 87, "t": 17081916000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=17", "d": {"data": [17, 17], "task": [1, "CtrlTask"]}}, {"n": 88, "t": 17081954000, "ii": 4, "lane": "CtrlTask", "msg": "温度 65.16 °C", "d": {"data": [65.16, 65.16], "task": [1, "CtrlTask"]}}, {"n": 89, "t": 17081994000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -52.1 %", "d": {"data": [-52.1, -52.1], "task": [1, "CtrlTask"]}}, {"n": 90, "t": 17082062000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [2, "CommTask"]}}, {"n": 91, "t": 17082558000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [0, "ISR"]}}, {"n": 92, "t": 17084534000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=18", "d": {"data": [18, 18], "task": [1, "CtrlTask"]}}, {"n": 93, "t": 17084609000, "ii": 4, "lane": "CtrlTask", "msg": "温度 65.06 °C", "d": {"data": [65.06, 65.06], "task": [1, "CtrlTask"]}}, {"n": 94, "t": 17084672000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 16.9 %", "d": {"data": [16.9, 16.9], "task": [1, "CtrlTask"]}}, {"n": 95, "t": 17084952000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x1A0", "d": {"data": [416, "0x1A0"], "task": [2, "CommTask"]}}, {"n": 96, "t": 17093794000, "ii": 7, "lane": "CommTask", "msg": "CAN応答タイムアウト (id=0x1A0)", "d": {"data": [416, "0x1A0"], "task": [2, "CommTask"]}}, {"n": 97, "t": 17094385000, "ii": 10, "lane": "CommTask", "msg": "エラー E_TIMEOUT", "d": {"data": [257, "E_TIMEOUT"], "task": [2, "CommTask"]}}, {"n": 98, "t": 17094679000, "ii": 9, "lane": "LogTask", "msg": "バッファ高水位 94 %", "d": {"data": [94, 94], "task": [3, "LogTask"]}}, {"n": 99, "t": 17095682000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=19", "d": {"data": [19, 19], "task": [1, "CtrlTask"]}}, {"n": 100, "t": 17095723000, "ii": 4, "lane": "CtrlTask", "msg": "温度 64.98 °C", "d": {"data": [64.98, 64.98], "task": [1, "CtrlTask"]}}, {"n": 101, "t": 17095759000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 5.2 %", "d": {"data": [5.2, 5.2], "task": [1, "CtrlTask"]}}, {"n": 102, "t": 17095995000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [2, "CommTask"]}}, {"n": 103, "t": 17096825000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [0, "ISR"]}}, {"n": 104, "t": 17098121000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=20", "d": {"data": [20, 20], "task": [1, "CtrlTask"]}}, {"n": 105, "t": 17098217000, "ii": 4, "lane": "CtrlTask", "msg": "温度 65.15 °C", "d": {"data": [65.15, 65.15], "task": [1, "CtrlTask"]}}, {"n": 106, "t": 17098238000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -16.5 %", "d": {"data": [-16.5, -16.5], "task": [1, "CtrlTask"]}}, {"n": 107, "t": 17098441000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x101", "d": {"data": [257, "0x101"], "task": [2, "CommTask"]}}, {"n": 108, "t": 17103720000, "ii": 7, "lane": "CommTask", "msg": "CAN応答タイムアウト (id=0x101)", "d": {"data": [257, "0x101"], "task": [2, "CommTask"]}}, {"n": 109, "t": 17104417000, "ii": 10, "lane": "CommTask", "msg": "エラー E_TIMEOUT", "d": {"data": [257, "E_TIMEOUT"], "task": [2, "CommTask"]}}, {"n": 110, "t": 17105740000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=21", "d": {"data": [21, 21], "task": [1, "CtrlTask"]}}, {"n": 111, "t": 17105856000, "ii": 4, "lane": "CtrlTask", "msg": "温度 65.12 °C", "d": {"data": [65.12, 65.12], "task": [1, "CtrlTask"]}}, {"n": 112, "t": 17105909000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -45.3 %", "d": {"data": [-45.3, -45.3], "task": [1, "CtrlTask"]}}, {"n": 113, "t": 17107445000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=22", "d": {"data": [22, 22], "task": [1, "CtrlTask"]}}, {"n": 114, "t": 17107516000, "ii": 4, "lane": "CtrlTask", "msg": "温度 65.22 °C", "d": {"data": [65.22, 65.22], "task": [1, "CtrlTask"]}}, {"n": 115, "t": 17107578000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -28.7 %", "d": {"data": [-28.7, -28.7], "task": [1, "CtrlTask"]}}, {"n": 116, "t": 17109265000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=23", "d": {"data": [23, 23], "task": [1, "CtrlTask"]}}, {"n": 117, "t": 17109323000, "ii": 4, "lane": "CtrlTask", "msg": "温度 65.27 °C", "d": {"data": [65.27, 65.27], "task": [1, "CtrlTask"]}}, {"n": 118, "t": 17109356000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -52.2 %", "d": {"data": [-52.2, -52.2], "task": [1, "CtrlTask"]}}, {"n": 119, "t": 17109440000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x101", "d": {"data": [257, "0x101"], "task": [2, "CommTask"]}}, {"n": 120, "t": 17110288000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x101", "d": {"data": [257, "0x101"], "task": [0, "ISR"]}}, {"n": 121, "t": 17110529000, "ii": 8, "lane": "LogTask", "msg": "バッファ使用率 41 %", "d": {"data": [41, 41], "task": [3, "LogTask"]}}, {"n": 122, "t": 17111982000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=24", "d": {"data": [24, 24], "task": [1, "CtrlTask"]}}, {"n": 123, "t": 17112039000, "ii": 4, "lane": "CtrlTask", "msg": "温度 65.38 °C", "d": {"data": [65.38, 65.38], "task": [1, "CtrlTask"]}}, {"n": 124, "t": 17112083000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 48.1 %", "d": {"data": [48.1, 48.1], "task": [1, "CtrlTask"]}}, {"n": 125, "t": 17112266000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x1A0", "d": {"data": [416, "0x1A0"], "task": [2, "CommTask"]}}, {"n": 126, "t": 17113119000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x1A0", "d": {"data": [416, "0x1A0"], "task": [0, "ISR"]}}, {"n": 127, "t": 17116035000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=25", "d": {"data": [25, 25], "task": [1, "CtrlTask"]}}, {"n": 128, "t": 17116069000, "ii": 4, "lane": "CtrlTask", "msg": "温度 65.4 °C", "d": {"data": [65.4, 65.4], "task": [1, "CtrlTask"]}}, {"n": 129, "t": 17116144000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 44.4 %", "d": {"data": [44.4, 44.4], "task": [1, "CtrlTask"]}}, {"n": 130, "t": 17117636000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=26", "d": {"data": [26, 26], "task": [1, "CtrlTask"]}}, {"n": 131, "t": 17117749000, "ii": 4, "lane": "CtrlTask", "msg": "温度 65.26 °C", "d": {"data": [65.26, 65.26], "task": [1, "CtrlTask"]}}, {"n": 132, "t": 17117810000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -52.2 %", "d": {"data": [-52.2, -52.2], "task": [1, "CtrlTask"]}}, {"n": 133, "t": 17117963000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x101", "d": {"data": [257, "0x101"], "task": [2, "CommTask"]}}, {"n": 134, "t": 17118355000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x101", "d": {"data": [257, "0x101"], "task": [0, "ISR"]}}, {"n": 135, "t": 17119563000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=27", "d": {"data": [27, 27], "task": [1, "CtrlTask"]}}, {"n": 136, "t": 17119650000, "ii": 4, "lane": "CtrlTask", "msg": "温度 65.17 °C", "d": {"data": [65.17, 65.17], "task": [1, "CtrlTask"]}}, {"n": 137, "t": 17119710000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 29.6 %", "d": {"data": [29.6, 29.6], "task": [1, "CtrlTask"]}}, {"n": 138, "t": 17122128000, "ii": 1, "lane": "CtrlTask", "msg": "状態遷移 → IDLE", "d": {"data": [1, "IDLE"], "task": [1, "CtrlTask"]}}, {"n": 139, "t": 33122128000, "ii": 1, "lane": "CtrlTask", "msg": "状態遷移 → RUN", "d": {"data": [2, "RUN"], "task": [1, "CtrlTask"]}}, {"n": 140, "t": 33122590000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=28", "d": {"data": [28, 28], "task": [1, "CtrlTask"]}}, {"n": 141, "t": 33122621000, "ii": 4, "lane": "CtrlTask", "msg": "温度 65.32 °C", "d": {"data": [65.32, 65.32], "task": [1, "CtrlTask"]}}, {"n": 142, "t": 33122675000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 66.2 %", "d": {"data": [66.2, 66.2], "task": [1, "CtrlTask"]}}, {"n": 143, "t": 33122734000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x1A0", "d": {"data": [416, "0x1A0"], "task": [2, "CommTask"]}}, {"n": 144, "t": 33123208000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x1A0", "d": {"data": [416, "0x1A0"], "task": [0, "ISR"]}}, {"n": 145, "t": 33125922000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=29", "d": {"data": [29, 29], "task": [1, "CtrlTask"]}}, {"n": 146, "t": 33125972000, "ii": 4, "lane": "CtrlTask", "msg": "温度 65.42 °C", "d": {"data": [65.42, 65.42], "task": [1, "CtrlTask"]}}, {"n": 147, "t": 33126046000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 63.3 %", "d": {"data": [63.3, 63.3], "task": [1, "CtrlTask"]}}, {"n": 148, "t": 33126327000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x1A0", "d": {"data": [416, "0x1A0"], "task": [2, "CommTask"]}}, {"n": 149, "t": 33127186000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x1A0", "d": {"data": [416, "0x1A0"], "task": [0, "ISR"]}}, {"n": 150, "t": 33127516000, "ii": 8, "lane": "LogTask", "msg": "バッファ使用率 78 %", "d": {"data": [78, 78], "task": [3, "LogTask"]}}, {"n": 151, "t": 33128472000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=30", "d": {"data": [30, 30], "task": [1, "CtrlTask"]}}, {"n": 152, "t": 33128550000, "ii": 4, "lane": "CtrlTask", "msg": "温度 65.59 °C", "d": {"data": [65.59, 65.59], "task": [1, "CtrlTask"]}}, {"n": 153, "t": 33128620000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -9.8 %", "d": {"data": [-9.8, -9.8], "task": [1, "CtrlTask"]}}, {"n": 154, "t": 33128788000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x101", "d": {"data": [257, "0x101"], "task": [2, "CommTask"]}}, {"n": 155, "t": 33129009000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x101", "d": {"data": [257, "0x101"], "task": [0, "ISR"]}}, {"n": 156, "t": 33129437000, "ii": 8, "lane": "LogTask", "msg": "バッファ使用率 35 %", "d": {"data": [35, 35], "task": [3, "LogTask"]}}, {"n": 157, "t": 33131181000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=31", "d": {"data": [31, 31], "task": [1, "CtrlTask"]}}, {"n": 158, "t": 33131222000, "ii": 4, "lane": "CtrlTask", "msg": "温度 65.63 °C", "d": {"data": [65.63, 65.63], "task": [1, "CtrlTask"]}}, {"n": 159, "t": 33131276000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -14.4 %", "d": {"data": [-14.4, -14.4], "task": [1, "CtrlTask"]}}, {"n": 160, "t": 33132362000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=32", "d": {"data": [32, 32], "task": [1, "CtrlTask"]}}, {"n": 161, "t": 33132396000, "ii": 4, "lane": "CtrlTask", "msg": "温度 65.76 °C", "d": {"data": [65.76, 65.76], "task": [1, "CtrlTask"]}}, {"n": 162, "t": 33132437000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 32.7 %", "d": {"data": [32.7, 32.7], "task": [1, "CtrlTask"]}}, {"n": 163, "t": 33133841000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=33", "d": {"data": [33, 33], "task": [1, "CtrlTask"]}}, {"n": 164, "t": 33133879000, "ii": 4, "lane": "CtrlTask", "msg": "温度 65.88 °C", "d": {"data": [65.88, 65.88], "task": [1, "CtrlTask"]}}, {"n": 165, "t": 33133950000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -72.9 %", "d": {"data": [-72.9, -72.9], "task": [1, "CtrlTask"]}}, {"n": 166, "t": 33134044000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [2, "CommTask"]}}, {"n": 167, "t": 33134307000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [0, "ISR"]}}, {"n": 168, "t": 33136882000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=34", "d": {"data": [34, 34], "task": [1, "CtrlTask"]}}, {"n": 169, "t": 33136968000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.04 °C", "d": {"data": [66.04, 66.04], "task": [1, "CtrlTask"]}}, {"n": 170, "t": 33137025000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 61.1 %", "d": {"data": [61.1, 61.1], "task": [1, "CtrlTask"]}}, {"n": 171, "t": 33138491000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=35", "d": {"data": [35, 35], "task": [1, "CtrlTask"]}}, {"n": 172, "t": 33138592000, "ii": 4, "lane": "CtrlTask", "msg": "温度 65.99 °C", "d": {"data": [65.99, 65.99], "task": [1, "CtrlTask"]}}, {"n": 173, "t": 33138645000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 25.3 %", "d": {"data": [25.3, 25.3], "task": [1, "CtrlTask"]}}, {"n": 174, "t": 33140490000, "ii": 1, "lane": "CtrlTask", "msg": "状態遷移 → IDLE", "d": {"data": [1, "IDLE"], "task": [1, "CtrlTask"]}}, {"n": 175, "t": 53140490000, "ii": 1, "lane": "CtrlTask", "msg": "状態遷移 → RUN", "d": {"data": [2, "RUN"], "task": [1, "CtrlTask"]}}, {"n": 176, "t": 53140903000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=36", "d": {"data": [36, 36], "task": [1, "CtrlTask"]}}, {"n": 177, "t": 53140951000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.17 °C", "d": {"data": [66.17, 66.17], "task": [1, "CtrlTask"]}}, {"n": 178, "t": 53140988000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 37.3 %", "d": {"data": [37.3, 37.3], "task": [1, "CtrlTask"]}}, {"n": 179, "t": 53141165000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [2, "CommTask"]}}, {"n": 180, "t": 53141402000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [0, "ISR"]}}, {"n": 181, "t": 53141811000, "ii": 8, "lane": "LogTask", "msg": "バッファ使用率 68 %", "d": {"data": [68, 68], "task": [3, "LogTask"]}}, {"n": 182, "t": 53143702000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=37", "d": {"data": [37, 37], "task": [1, "CtrlTask"]}}, {"n": 183, "t": 53143783000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.09 °C", "d": {"data": [66.09, 66.09], "task": [1, "CtrlTask"]}}, {"n": 184, "t": 53143834000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -61.0 %", "d": {"data": [-61.0, -61.0], "task": [1, "CtrlTask"]}}, {"n": 185, "t": 53144060000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [2, "CommTask"]}}, {"n": 186, "t": 53144649000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [0, "ISR"]}}, {"n": 187, "t": 53144955000, "ii": 8, "lane": "LogTask", "msg": "バッファ使用率 54 %", "d": {"data": [54, 54], "task": [3, "LogTask"]}}, {"n": 188, "t": 53146108000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=38", "d": {"data": [38, 38], "task": [1, "CtrlTask"]}}, {"n": 189, "t": 53146181000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.21 °C", "d": {"data": [66.21, 66.21], "task": [1, "CtrlTask"]}}, {"n": 190, "t": 53146258000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 17.5 %", "d": {"data": [17.5, 17.5], "task": [1, "CtrlTask"]}}, {"n": 191, "t": 53146442000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x101", "d": {"data": [257, "0x101"], "task": [2, "CommTask"]}}, {"n": 192, "t": 53146991000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x101", "d": {"data": [257, "0x101"], "task": [0, "ISR"]}}, {"n": 193, "t": 53148070000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=39", "d": {"data": [39, 39], "task": [1, "CtrlTask"]}}, {"n": 194, "t": 53148104000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.18 °C", "d": {"data": [66.18, 66.18], "task": [1, "CtrlTask"]}}, {"n": 195, "t": 53148133000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -33.5 %", "d": {"data": [-33.5, -33.5], "task": [1, "CtrlTask"]}}, {"n": 196, "t": 53149486000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=40", "d": {"data": [40, 40], "task": [1, "CtrlTask"]}}, {"n": 197, "t": 53149595000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.34 °C", "d": {"data": [66.34, 66.34], "task": [1, "CtrlTask"]}}, {"n": 198, "t": 53149621000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 22.3 %", "d": {"data": [22.3, 22.3], "task": [1, "CtrlTask"]}}, {"n": 199, "t": 53149858000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [2, "CommTask"]}}, {"n": 200, "t": 53150616000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [0, "ISR"]}}, {"n": 201, "t": 53151664000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=41", "d": {"data": [41, 41], "task": [1, "CtrlTask"]}}, {"n": 202, "t": 53151742000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.45 °C", "d": {"data": [66.45, 66.45], "task": [1, "CtrlTask"]}}, {"n": 203, "t": 53151814000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 28.4 %", "d": {"data": [28.4, 28.4], "task": [1, "CtrlTask"]}}, {"n": 204, "t": 53152021000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x101", "d": {"data": [257, "0x101"], "task": [2, "CommTask"]}}, {"n": 205, "t": 53152787000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x101", "d": {"data": [257, "0x101"], "task": [0, "ISR"]}}, {"n": 206, "t": 53152998000, "ii": 9, "lane": "LogTask", "msg": "バッファ高水位 87 %", "d": {"data": [87, 87], "task": [3, "LogTask"]}}, {"n": 207, "t": 53155149000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=42", "d": {"data": [42, 42], "task": [1, "CtrlTask"]}}, {"n": 208, "t": 53155254000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.38 °C", "d": {"data": [66.38, 66.38], "task": [1, "CtrlTask"]}}, {"n": 209, "t": 53155288000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 71.7 %", "d": {"data": [71.7, 71.7], "task": [1, "CtrlTask"]}}, {"n": 210, "t": 53156943000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=43", "d": {"data": [43, 43], "task": [1, "CtrlTask"]}}, {"n": 211, "t": 53156997000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.36 °C", "d": {"data": [66.36, 66.36], "task": [1, "CtrlTask"]}}, {"n": 212, "t": 53157066000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -40.2 %", "d": {"data": [-40.2, -40.2], "task": [1, "CtrlTask"]}}, {"n": 213, "t": 53157343000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x101", "d": {"data": [257, "0x101"], "task": [2, "CommTask"]}}, {"n": 214, "t": 53157598000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x101", "d": {"data": [257, "0x101"], "task": [0, "ISR"]}}, {"n": 215, "t": 53157830000, "ii": 8, "lane": "LogTask", "msg": "バッファ使用率 69 %", "d": {"data": [69, 69], "task": [3, "LogTask"]}}, {"n": 216, "t": 53159629000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=44", "d": {"data": [44, 44], "task": [1, "CtrlTask"]}}, {"n": 217, "t": 53159728000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.29 °C", "d": {"data": [66.29, 66.29], "task": [1, "CtrlTask"]}}, {"n": 218, "t": 53159760000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 2.4 %", "d": {"data": [2.4, 2.4], "task": [1, "CtrlTask"]}}, {"n": 219, "t": 53159970000, "ii": 8, "lane": "LogTask", "msg": "バッファ使用率 22 %", "d": {"data": [22, 22], "task": [3, "LogTask"]}}, {"n": 220, "t": 53162269000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=45", "d": {"data": [45, 45], "task": [1, "CtrlTask"]}}, {"n": 221, "t": 53162344000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.37 °C", "d": {"data": [66.37, 66.37], "task": [1, "CtrlTask"]}}, {"n": 222, "t": 53162371000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 64.3 %", "d": {"data": [64.3, 64.3], "task": [1, "CtrlTask"]}}, {"n": 223, "t": 53164754000, "ii": 1, "lane": "CtrlTask", "msg": "状態遷移 → IDLE", "d": {"data": [1, "IDLE"], "task": [1, "CtrlTask"]}}, {"n": 224, "t": 56164754000, "ii": 1, "lane": "CtrlTask", "msg": "状態遷移 → RUN", "d": {"data": [2, "RUN"], "task": [1, "CtrlTask"]}}, {"n": 225, "t": 56165447000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=46", "d": {"data": [46, 46], "task": [1, "CtrlTask"]}}, {"n": 226, "t": 56165480000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.24 °C", "d": {"data": [66.24, 66.24], "task": [1, "CtrlTask"]}}, {"n": 227, "t": 56165548000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 32.9 %", "d": {"data": [32.9, 32.9], "task": [1, "CtrlTask"]}}, {"n": 228, "t": 56165755000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [2, "CommTask"]}}, {"n": 229, "t": 56166367000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [0, "ISR"]}}, {"n": 230, "t": 56166561000, "ii": 8, "lane": "LogTask", "msg": "バッファ使用率 34 %", "d": {"data": [34, 34], "task": [3, "LogTask"]}}, {"n": 231, "t": 56167821000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=47", "d": {"data": [47, 47], "task": [1, "CtrlTask"]}}, {"n": 232, "t": 56167887000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.15 °C", "d": {"data": [66.15, 66.15], "task": [1, "CtrlTask"]}}, {"n": 233, "t": 56167944000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -67.4 %", "d": {"data": [-67.4, -67.4], "task": [1, "CtrlTask"]}}, {"n": 234, "t": 56168028000, "ii": 8, "lane": "LogTask", "msg": "バッファ使用率 79 %", "d": {"data": [79, 79], "task": [3, "LogTask"]}}, {"n": 235, "t": 56169539000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=48", "d": {"data": [48, 48], "task": [1, "CtrlTask"]}}, {"n": 236, "t": 56169619000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.29 °C", "d": {"data": [66.29, 66.29], "task": [1, "CtrlTask"]}}, {"n": 237, "t": 56169666000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 25.5 %", "d": {"data": [25.5, 25.5], "task": [1, "CtrlTask"]}}, {"n": 238, "t": 56169806000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [2, "CommTask"]}}, {"n": 239, "t": 56170308000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [0, "ISR"]}}, {"n": 240, "t": 56171937000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=49", "d": {"data": [49, 49], "task": [1, "CtrlTask"]}}, {"n": 241, "t": 56172019000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.43 °C", "d": {"data": [66.43, 66.43], "task": [1, "CtrlTask"]}}, {"n": 242, "t": 56172062000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 71.4 %", "d": {"data": [71.4, 71.4], "task": [1, "CtrlTask"]}}, {"n": 243, "t": 56172206000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x101", "d": {"data": [257, "0x101"], "task": [2, "CommTask"]}}, {"n": 244, "t": 56172945000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x101", "d": {"data": [257, "0x101"], "task": [0, "ISR"]}}, {"n": 245, "t": 56174280000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=50", "d": {"data": [50, 50], "task": [1, "CtrlTask"]}}, {"n": 246, "t": 56174400000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.53 °C", "d": {"data": [66.53, 66.53], "task": [1, "CtrlTask"]}}, {"n": 247, "t": 56174456000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 42.7 %", "d": {"data": [42.7, 42.7], "task": [1, "CtrlTask"]}}, {"n": 248, "t": 56174554000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x1A0", "d": {"data": [416, "0x1A0"], "task": [2, "CommTask"]}}, {"n": 249, "t": 56175454000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x1A0", "d": {"data": [416, "0x1A0"], "task": [0, "ISR"]}}, {"n": 250, "t": 56177243000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=51", "d": {"data": [51, 51], "task": [1, "CtrlTask"]}}, {"n": 251, "t": 56177290000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.59 °C", "d": {"data": [66.59, 66.59], "task": [1, "CtrlTask"]}}, {"n": 252, "t": 56177366000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 30.3 %", "d": {"data": [30.3, 30.3], "task": [1, "CtrlTask"]}}, {"n": 253, "t": 56177593000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x1A0", "d": {"data": [416, "0x1A0"], "task": [2, "CommTask"]}}, {"n": 254, "t": 56177898000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x1A0", "d": {"data": [416, "0x1A0"], "task": [0, "ISR"]}}, {"n": 255, "t": 56178367000, "ii": 8, "lane": "LogTask", "msg": "バッファ使用率 43 %", "d": {"data": [43, 43], "task": [3, "LogTask"]}}, {"n": 256, "t": 56179857000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=52", "d": {"data": [52, 52], "task": [1, "CtrlTask"]}}, {"n": 257, "t": 56179947000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.5 °C", "d": {"data": [66.5, 66.5], "task": [1, "CtrlTask"]}}, {"n": 258, "t": 56179967000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -7.2 %", "d": {"data": [-7.2, -7.2], "task": [1, "CtrlTask"]}}, {"n": 259, "t": 56180180000, "ii": 8, "lane": "LogTask", "msg": "バッファ使用率 26 %", "d": {"data": [26, 26], "task": [3, "LogTask"]}}, {"n": 260, "t": 56182494000, "ii": 1, "lane": "CtrlTask", "msg": "状態遷移 → IDLE", "d": {"data": [1, "IDLE"], "task": [1, "CtrlTask"]}}, {"n": 261, "t": 63182494000, "ii": 1, "lane": "CtrlTask", "msg": "状態遷移 → RUN", "d": {"data": [2, "RUN"], "task": [1, "CtrlTask"]}}, {"n": 262, "t": 63183369000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=53", "d": {"data": [53, 53], "task": [1, "CtrlTask"]}}, {"n": 263, "t": 63183471000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.46 °C", "d": {"data": [66.46, 66.46], "task": [1, "CtrlTask"]}}, {"n": 264, "t": 63183525000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -64.3 %", "d": {"data": [-64.3, -64.3], "task": [1, "CtrlTask"]}}, {"n": 265, "t": 63183674000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x1A0", "d": {"data": [416, "0x1A0"], "task": [2, "CommTask"]}}, {"n": 266, "t": 63184451000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x1A0", "d": {"data": [416, "0x1A0"], "task": [0, "ISR"]}}, {"n": 267, "t": 63185458000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=54", "d": {"data": [54, 54], "task": [1, "CtrlTask"]}}, {"n": 268, "t": 63185502000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.37 °C", "d": {"data": [66.37, 66.37], "task": [1, "CtrlTask"]}}, {"n": 269, "t": 63185569000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -31.5 %", "d": {"data": [-31.5, -31.5], "task": [1, "CtrlTask"]}}, {"n": 270, "t": 63185684000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [2, "CommTask"]}}, {"n": 271, "t": 63185855000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [0, "ISR"]}}, {"n": 272, "t": 63186286000, "ii": 8, "lane": "LogTask", "msg": "バッファ使用率 68 %", "d": {"data": [68, 68], "task": [3, "LogTask"]}}, {"n": 273, "t": 63187662000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=55", "d": {"data": [55, 55], "task": [1, "CtrlTask"]}}, {"n": 274, "t": 63187727000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.43 °C", "d": {"data": [66.43, 66.43], "task": [1, "CtrlTask"]}}, {"n": 275, "t": 63187782000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 30.6 %", "d": {"data": [30.6, 30.6], "task": [1, "CtrlTask"]}}, {"n": 276, "t": 63187962000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [2, "CommTask"]}}, {"n": 277, "t": 63188663000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [0, "ISR"]}}, {"n": 278, "t": 63189770000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=56", "d": {"data": [56, 56], "task": [1, "CtrlTask"]}}, {"n": 279, "t": 63189870000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.3 °C", "d": {"data": [66.3, 66.3], "task": [1, "CtrlTask"]}}, {"n": 280, "t": 63189914000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -47.3 %", "d": {"data": [-47.3, -47.3], "task": [1, "CtrlTask"]}}, {"n": 281, "t": 63190062000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x101", "d": {"data": [257, "0x101"], "task": [2, "CommTask"]}}, {"n": 282, "t": 63190689000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x101", "d": {"data": [257, "0x101"], "task": [0, "ISR"]}}, {"n": 283, "t": 63192906000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=57", "d": {"data": [57, 57], "task": [1, "CtrlTask"]}}, {"n": 284, "t": 63192989000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.33 °C", "d": {"data": [66.33, 66.33], "task": [1, "CtrlTask"]}}, {"n": 285, "t": 63193042000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 1.6 %", "d": {"data": [1.6, 1.6], "task": [1, "CtrlTask"]}}, {"n": 286, "t": 63193245000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [2, "CommTask"]}}, {"n": 287, "t": 63193657000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [0, "ISR"]}}, {"n": 288, "t": 63196054000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=58", "d": {"data": [58, 58], "task": [1, "CtrlTask"]}}, {"n": 289, "t": 63196121000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.19 °C", "d": {"data": [66.19, 66.19], "task": [1, "CtrlTask"]}}, {"n": 290, "t": 63196141000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 78.2 %", "d": {"data": [78.2, 78.2], "task": [1, "CtrlTask"]}}, {"n": 291, "t": 63196253000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [2, "CommTask"]}}, {"n": 292, "t": 63196533000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x2F5", "d": {"data": [757, "0x2F5"], "task": [0, "ISR"]}}, {"n": 293, "t": 63196983000, "ii": 8, "lane": "LogTask", "msg": "バッファ使用率 69 %", "d": {"data": [69, 69], "task": [3, "LogTask"]}}, {"n": 294, "t": 63199385000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=59", "d": {"data": [59, 59], "task": [1, "CtrlTask"]}}, {"n": 295, "t": 63199465000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.07 °C", "d": {"data": [66.07, 66.07], "task": [1, "CtrlTask"]}}, {"n": 296, "t": 63199522000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 68.0 %", "d": {"data": [68.0, 68.0], "task": [1, "CtrlTask"]}}, {"n": 297, "t": 63199813000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x101", "d": {"data": [257, "0x101"], "task": [2, "CommTask"]}}, {"n": 298, "t": 63200372000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x101", "d": {"data": [257, "0x101"], "task": [0, "ISR"]}}, {"n": 299, "t": 63200600000, "ii": 8, "lane": "LogTask", "msg": "バッファ使用率 51 %", "d": {"data": [51, 51], "task": [3, "LogTask"]}}, {"n": 300, "t": 63203101000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=60", "d": {"data": [60, 60], "task": [1, "CtrlTask"]}}, {"n": 301, "t": 63203190000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.01 °C", "d": {"data": [66.01, 66.01], "task": [1, "CtrlTask"]}}, {"n": 302, "t": 63203262000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -29.8 %", "d": {"data": [-29.8, -29.8], "task": [1, "CtrlTask"]}}, {"n": 303, "t": 63205199000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=61", "d": {"data": [61, 61], "task": [1, "CtrlTask"]}}, {"n": 304, "t": 63205244000, "ii": 4, "lane": "CtrlTask", "msg": "温度 65.99 °C", "d": {"data": [65.99, 65.99], "task": [1, "CtrlTask"]}}, {"n": 305, "t": 63205319000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -69.4 %", "d": {"data": [-69.4, -69.4], "task": [1, "CtrlTask"]}}, {"n": 306, "t": 63205460000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x101", "d": {"data": [257, "0x101"], "task": [2, "CommTask"]}}, {"n": 307, "t": 63205952000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x101", "d": {"data": [257, "0x101"], "task": [0, "ISR"]}}, {"n": 308, "t": 63207729000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=62", "d": {"data": [62, 62], "task": [1, "CtrlTask"]}}, {"n": 309, "t": 63207840000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.1 °C", "d": {"data": [66.1, 66.1], "task": [1, "CtrlTask"]}}, {"n": 310, "t": 63207883000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 79.3 %", "d": {"data": [79.3, 79.3], "task": [1, "CtrlTask"]}}, {"n": 311, "t": 63208123000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x101", "d": {"data": [257, "0x101"], "task": [2, "CommTask"]}}, {"n": 312, "t": 63208540000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x101", "d": {"data": [257, "0x101"], "task": [0, "ISR"]}}, {"n": 313, "t": 63208762000, "ii": 8, "lane": "LogTask", "msg": "バッファ使用率 81 %", "d": {"data": [81, 81], "task": [3, "LogTask"]}}, {"n": 314, "t": 63210338000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=63", "d": {"data": [63, 63], "task": [1, "CtrlTask"]}}, {"n": 315, "t": 63210432000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.17 °C", "d": {"data": [66.17, 66.17], "task": [1, "CtrlTask"]}}, {"n": 316, "t": 63210469000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -24.4 %", "d": {"data": [-24.4, -24.4], "task": [1, "CtrlTask"]}}, {"n": 317, "t": 63211864000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=64", "d": {"data": [64, 64], "task": [1, "CtrlTask"]}}, {"n": 318, "t": 63211975000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.19 °C", "d": {"data": [66.19, 66.19], "task": [1, "CtrlTask"]}}, {"n": 319, "t": 63212043000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -31.0 %", "d": {"data": [-31.0, -31.0], "task": [1, "CtrlTask"]}}, {"n": 320, "t": 63213342000, "ii": 1, "lane": "CtrlTask", "msg": "状態遷移 → IDLE", "d": {"data": [1, "IDLE"], "task": [1, "CtrlTask"]}}, {"n": 321, "t": 65213342000, "ii": 1, "lane": "CtrlTask", "msg": "状態遷移 → RUN", "d": {"data": [2, "RUN"], "task": [1, "CtrlTask"]}}, {"n": 322, "t": 65214185000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=65", "d": {"data": [65, 65], "task": [1, "CtrlTask"]}}, {"n": 323, "t": 65214216000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.21 °C", "d": {"data": [66.21, 66.21], "task": [1, "CtrlTask"]}}, {"n": 324, "t": 65214252000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 7.0 %", "d": {"data": [7.0, 7.0], "task": [1, "CtrlTask"]}}, {"n": 325, "t": 65214308000, "ii": 8, "lane": "LogTask", "msg": "バッファ使用率 33 %", "d": {"data": [33, 33], "task": [3, "LogTask"]}}, {"n": 326, "t": 65215321000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=66", "d": {"data": [66, 66], "task": [1, "CtrlTask"]}}, {"n": 327, "t": 65215362000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.16 °C", "d": {"data": [66.16, 66.16], "task": [1, "CtrlTask"]}}, {"n": 328, "t": 65215417000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -32.0 %", "d": {"data": [-32.0, -32.0], "task": [1, "CtrlTask"]}}, {"n": 329, "t": 65216859000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=67", "d": {"data": [67, 67], "task": [1, "CtrlTask"]}}, {"n": 330, "t": 65216932000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.22 °C", "d": {"data": [66.22, 66.22], "task": [1, "CtrlTask"]}}, {"n": 331, "t": 65216983000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 72.5 %", "d": {"data": [72.5, 72.5], "task": [1, "CtrlTask"]}}, {"n": 332, "t": 65218783000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=68", "d": {"data": [68, 68], "task": [1, "CtrlTask"]}}, {"n": 333, "t": 65218892000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.2 °C", "d": {"data": [66.2, 66.2], "task": [1, "CtrlTask"]}}, {"n": 334, "t": 65218940000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 6.9 %", "d": {"data": [6.9, 6.9], "task": [1, "CtrlTask"]}}, {"n": 335, "t": 65219181000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x101", "d": {"data": [257, "0x101"], "task": [2, "CommTask"]}}, {"n": 336, "t": 65219678000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x101", "d": {"data": [257, "0x101"], "task": [0, "ISR"]}}, {"n": 337, "t": 65222437000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=69", "d": {"data": [69, 69], "task": [1, "CtrlTask"]}}, {"n": 338, "t": 65222490000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.32 °C", "d": {"data": [66.32, 66.32], "task": [1, "CtrlTask"]}}, {"n": 339, "t": 65222551000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -4.4 %", "d": {"data": [-4.4, -4.4], "task": [1, "CtrlTask"]}}, {"n": 340, "t": 65222749000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x1A0", "d": {"data": [416, "0x1A0"], "task": [2, "CommTask"]}}, {"n": 341, "t": 65222949000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x1A0", "d": {"data": [416, "0x1A0"], "task": [0, "ISR"]}}, {"n": 342, "t": 65225739000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=70", "d": {"data": [70, 70], "task": [1, "CtrlTask"]}}, {"n": 343, "t": 65225856000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.46 °C", "d": {"data": [66.46, 66.46], "task": [1, "CtrlTask"]}}, {"n": 344, "t": 65225895000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 78.8 %", "d": {"data": [78.8, 78.8], "task": [1, "CtrlTask"]}}, {"n": 345, "t": 65225947000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x101", "d": {"data": [257, "0x101"], "task": [2, "CommTask"]}}, {"n": 346, "t": 65226744000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x101", "d": {"data": [257, "0x101"], "task": [0, "ISR"]}}, {"n": 347, "t": 65229563000, "ii": 1, "lane": "CtrlTask", "msg": "状態遷移 → IDLE", "d": {"data": [1, "IDLE"], "task": [1, "CtrlTask"]}}, {"n": 348, "t": 75229563000, "ii": 1, "lane": "CtrlTask", "msg": "状態遷移 → RUN", "d": {"data": [2, "RUN"], "task": [1, "CtrlTask"]}}, {"n": 349, "t": 75229909000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=71", "d": {"data": [71, 71], "task": [1, "CtrlTask"]}}, {"n": 350, "t": 75229984000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.51 °C", "d": {"data": [66.51, 66.51], "task": [1, "CtrlTask"]}}, {"n": 351, "t": 75230027000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -56.0 %", "d": {"data": [-56.0, -56.0], "task": [1, "CtrlTask"]}}, {"n": 352, "t": 75232366000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=72", "d": {"data": [72, 72], "task": [1, "CtrlTask"]}}, {"n": 353, "t": 75232431000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.64 °C", "d": {"data": [66.64, 66.64], "task": [1, "CtrlTask"]}}, {"n": 354, "t": 75232484000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -17.6 %", "d": {"data": [-17.6, -17.6], "task": [1, "CtrlTask"]}}, {"n": 355, "t": 75232651000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x1A0", "d": {"data": [416, "0x1A0"], "task": [2, "CommTask"]}}, {"n": 356, "t": 75239552000, "ii": 7, "lane": "CommTask", "msg": "CAN応答タイムアウト (id=0x1A0)", "d": {"data": [416, "0x1A0"], "task": [2, "CommTask"]}}, {"n": 357, "t": 75240126000, "ii": 10, "lane": "CommTask", "msg": "エラー E_TIMEOUT", "d": {"data": [257, "E_TIMEOUT"], "task": [2, "CommTask"]}}, {"n": 358, "t": 75242235000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=73", "d": {"data": [73, 73], "task": [1, "CtrlTask"]}}, {"n": 359, "t": 75242314000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.61 °C", "d": {"data": [66.61, 66.61], "task": [1, "CtrlTask"]}}, {"n": 360, "t": 75242381000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 35.4 %", "d": {"data": [35.4, 35.4], "task": [1, "CtrlTask"]}}, {"n": 361, "t": 75242525000, "ii": 9, "lane": "LogTask", "msg": "バッファ高水位 89 %", "d": {"data": [89, 89], "task": [3, "LogTask"]}}, {"n": 362, "t": 75244582000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=74", "d": {"data": [74, 74], "task": [1, "CtrlTask"]}}, {"n": 363, "t": 75244634000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.57 °C", "d": {"data": [66.57, 66.57], "task": [1, "CtrlTask"]}}, {"n": 364, "t": 75244659000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 75.4 %", "d": {"data": [75.4, 75.4], "task": [1, "CtrlTask"]}}, {"n": 365, "t": 75246078000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=75", "d": {"data": [75, 75], "task": [1, "CtrlTask"]}}, {"n": 366, "t": 75246174000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.45 °C", "d": {"data": [66.45, 66.45], "task": [1, "CtrlTask"]}}, {"n": 367, "t": 75246228000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -47.6 %", "d": {"data": [-47.6, -47.6], "task": [1, "CtrlTask"]}}, {"n": 368, "t": 75246423000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x101", "d": {"data": [257, "0x101"], "task": [2, "CommTask"]}}, {"n": 369, "t": 75247209000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x101", "d": {"data": [257, "0x101"], "task": [0, "ISR"]}}, {"n": 370, "t": 75248950000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=76", "d": {"data": [76, 76], "task": [1, "CtrlTask"]}}, {"n": 371, "t": 75249049000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.35 °C", "d": {"data": [66.35, 66.35], "task": [1, "CtrlTask"]}}, {"n": 372, "t": 75249090000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -63.3 %", "d": {"data": [-63.3, -63.3], "task": [1, "CtrlTask"]}}, {"n": 373, "t": 75249210000, "ii": 8, "lane": "LogTask", "msg": "バッファ使用率 60 %", "d": {"data": [60, 60], "task": [3, "LogTask"]}}, {"n": 374, "t": 75251459000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=77", "d": {"data": [77, 77], "task": [1, "CtrlTask"]}}, {"n": 375, "t": 75251507000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.26 °C", "d": {"data": [66.26, 66.26], "task": [1, "CtrlTask"]}}, {"n": 376, "t": 75251574000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 52.9 %", "d": {"data": [52.9, 52.9], "task": [1, "CtrlTask"]}}, {"n": 377, "t": 75251732000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x101", "d": {"data": [257, "0x101"], "task": [2, "CommTask"]}}, {"n": 378, "t": 75252352000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x101", "d": {"data": [257, "0x101"], "task": [0, "ISR"]}}, {"n": 379, "t": 75254326000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=78", "d": {"data": [78, 78], "task": [1, "CtrlTask"]}}, {"n": 380, "t": 75254400000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.32 °C", "d": {"data": [66.32, 66.32], "task": [1, "CtrlTask"]}}, {"n": 381, "t": 75254471000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -11.9 %", "d": {"data": [-11.9, -11.9], "task": [1, "CtrlTask"]}}, {"n": 382, "t": 75254693000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x1A0", "d": {"data": [416, "0x1A0"], "task": [2, "CommTask"]}}, {"n": 383, "t": 75255363000, "ii": 6, "lane": "ISR", "msg": "CAN受信 id=0x1A0", "d": {"data": [416, "0x1A0"], "task": [0, "ISR"]}}, {"n": 384, "t": 75257992000, "ii": 2, "lane": "CtrlTask", "msg": "制御周期開始 seq=79", "d": {"data": [79, 79], "task": [1, "CtrlTask"]}}, {"n": 385, "t": 75258107000, "ii": 4, "lane": "CtrlTask", "msg": "温度 66.39 °C", "d": {"data": [66.39, 66.39], "task": [1, "CtrlTask"]}}, {"n": 386, "t": 75258181000, "ii": 3, "lane": "CtrlTask", "msg": "モータ出力 -79.3 %", "d": {"data": [-79.3, -79.3], "task": [1, "CtrlTask"]}}, {"n": 387, "t": 75258437000, "ii": 5, "lane": "CommTask", "msg": "CAN送信 id=0x101", "d": {"data": [257, "0x101"], "task": [2, "CommTask"]}}, {"n": 388, "t": 75263231000, "ii": 7, "lane": "CommTask", "msg": "CAN応答タイムアウト (id=0x101)", "d": {"data": [257, "0x101"], "task": [2, "CommTask"]}}, {"n": 389, "t": 75265357000, "ii": 1, "lane": "CtrlTask", "msg": "状態遷移 → IDLE", "d": {"data": [1, "IDLE"], "task": [1, "CtrlTask"]}}]}</script>
+<script>
+(function(){
+"use strict";
+const D = JSON.parse(document.getElementById("logdata").textContent);
+const ids = D.ids, events = D.events, N = events.length;
+const LV = {debug:0, info:1, warn:2, error:3};
+const ROW_H = 26, BREAK_H = 24, BUF = 700;
+const ID_CHIP_CAP = 200;
+
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+/* ---------- レーン構成・検索用文字列の前計算 ---------- */
+const laneNames = [];
+events.forEach(e=>{ const l = e.lane==null ? "LOG" : e.lane;
+  e._lane = l; if(!laneNames.includes(l)) laneNames.push(l); });
+const L = laneNames.length;
+const laneIdx = {}; laneNames.forEach((l,i)=>laneIdx[l]=i);
+const laneCount = {}; laneNames.forEach(l=>laneCount[l]=0);
+const idCount = ids.map(()=>0);
+events.forEach(e=>{ laneCount[e._lane]++; idCount[e.ii]++;
+  e._hay = (ids[e.ii].name + " " + e.msg + " " + e._lane).toLowerCase(); });
+
+const gridCols = "var(--gut) " + "minmax(150px,1fr) ".repeat(L);
+const head = document.getElementById("laneHead");
+head.style.gridTemplateColumns = gridCols;
+head.innerHTML = '<div>time / Δ</div>' + laneNames.map(n=>'<div>'+esc(n)+'</div>').join("");
+
+/* ---------- 時刻フォーマット ---------- */
+function fmtDur(ns){
+  const a = Math.abs(ns);
+  if(a < 1e3)  return ns + " ns";
+  if(a < 1e6)  return trim(ns/1e3)  + " µs";
+  if(a < 1e9)  return trim(ns/1e6)  + " ms";
+  if(a < 60e9) return trim(ns/1e9)  + " s";
+  if(a < 3600e9) return trim(ns/60e9) + " min";
+  return trim(ns/3600e9) + " h";
+}
+function trim(v){ return (Math.round(v*1000)/1000).toLocaleString(); }
+function fmtAbs(rel){
+  if(D.epoch !== "unix"){
+    const s = Math.floor(rel/1e9), frac = rel - s*1e9;
+    return s + "." + String(frac).padStart(9,"0").replace(/(\d{3})(\d{3})(\d{3})/,"$1 $2 $3") + " s";
+  }
+  let nsec = D.t0Nsec + rel;
+  const sec = D.t0Sec + Math.floor(nsec/1e9);
+  nsec = nsec % 1e9;
+  const d = new Date(sec*1000);
+  const p = n=>String(n).padStart(2,"0");
+  return p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds())
+       + "." + String(nsec).padStart(9,"0").replace(/(\d{3})(\d{3})(\d{3})/,"$1 $2 $3");
+}
+
+/* ---------- ヘッダ・注意書き ---------- */
+document.getElementById("hMeta").textContent =
+  D.meta.file + "  |  " + D.meta.size_bytes.toLocaleString() + " bytes  |  record " +
+  D.meta.record_size + " B × " + N.toLocaleString() + " logs  |  span " +
+  (N ? fmtDur(events[N-1].t - events[0].t) : "-");
+document.getElementById("foot").textContent =
+  "generated " + D.meta.generated + " / format: " + D.meta.format_file;
+const notices = document.getElementById("notices");
+function notice(msg){ const d=document.createElement("div"); d.className="notice"; d.textContent=msg; notices.appendChild(d); }
+if(D.meta.remainder) notice("ファイル末尾に端数 " + D.meta.remainder + " B があります(フォーマット不一致の可能性)。");
+if(D.meta.order_warn) notice("タイムスタンプが昇順でないレコードがありました。時刻順に並べ替えて表示しています(カウンタ折り返しの場合は timestamp.wrap_bits の指定を検討してください)。");
+
+/* ---------- レーンチップ ---------- */
+const laneActive = laneNames.map(()=>true);
+const chipHost = document.getElementById("laneChips");
+laneNames.forEach((l,i)=>{
+  const c = document.createElement("span");
+  c.className = "chip";
+  c.innerHTML = esc(l) + ' <span class="n">'+laneCount[l].toLocaleString()+'</span>';
+  c.onclick = ()=>{ laneActive[i]=!laneActive[i]; c.classList.toggle("off",!laneActive[i]); layout(); };
+  chipHost.appendChild(c);
+});
+
+/* ---------- ID 別件数 ---------- */
+const qEl = document.getElementById("q");
+const grid = document.getElementById("idGrid");
+{
+  const order = ids.map((t,i)=>({t,i})).filter(x=>idCount[x.i])
+                   .sort((a,b)=>idCount[b.i]-idCount[a.i]);
+  order.slice(0, ID_CHIP_CAP).forEach(({t,i})=>{
+    const c = document.createElement("span");
+    c.className = "chip";
+    c.innerHTML = '<span class="lv" style="background:'+t.color+'"></span>'
+                + esc(t.name)+' <span class="n">'+idCount[i].toLocaleString()+'</span>';
+    c.title = "id=" + t.key + " / level=" + t.level;
+    c.onclick = ()=>{ qEl.value = (qEl.value===t.name) ? "" : t.name; layout(); };
+    grid.appendChild(c);
+  });
+  if(order.length > ID_CHIP_CAP){
+    const m=document.createElement("span"); m.className="more";
+    m.textContent = "…他 " + (order.length-ID_CHIP_CAP) + " 種 (検索欄で指定可)";
+    grid.appendChild(m);
+  }
+}
+
+/* ---------- レーン背景線 ---------- */
+const body = document.getElementById("tlBody");
+(function laneLines(){
+  const imgs=[], pos=[];
+  for(let i=0;i<L;i++){
+    imgs.push("linear-gradient(var(--lane),var(--lane))");
+    pos.push("calc(var(--gut) + (100% - var(--gut))*"+((i+0.5)/L).toFixed(4)+") 0");
+  }
+  body.style.backgroundImage=imgs.join(",");
+  body.style.backgroundPosition=pos.join(",");
+  body.style.backgroundSize="1px 100%";
+  body.style.backgroundRepeat="no-repeat";
+})();
+
+/* ==================================================================
+   仮想スクロール: フィルタ後の全アイテムの y 座標だけ先に計算し、
+   画面内 (±BUF px) のアイテムのみ DOM 化する。数十万件まで対応。
+   ================================================================== */
+const modeEl=document.getElementById("mode"), breakEl=document.getElementById("breakF"),
+      zoomEl=document.getElementById("zoom"), lvEl=document.getElementById("lvSel");
+qEl.addEventListener("input", debounce(layout,200));
+modeEl.onchange=layout; breakEl.onchange=layout; lvEl.onchange=layout;
+zoomEl.addEventListener("input", debounce(layout,120));
+function debounce(fn,ms){let t;return()=>{clearTimeout(t);t=setTimeout(fn,ms);};}
+
+function median(arr){ if(!arr.length) return 0;
+  const s=Float64Array.from(arr).sort(); const m=s.length>>1;
+  return s.length%2 ? s[m] : (s[m-1]+s[m])/2; }
+
+let items=[], winA=-1, winB=-2, selKey=null;
+
+function layout(){
+  const q = qEl.value.toLowerCase();
+  const minLv = +lvEl.value;
+  const vis = [];
+  for(const e of events){
+    if(!laneActive[laneIdx[e._lane]]) continue;
+    if(LV[ids[e.ii].level] < minLv) continue;
+    if(q && !e._hay.includes(q)) continue;
+    vis.push(e);
+  }
+  document.getElementById("cnt").textContent =
+    vis.length.toLocaleString() + " / " + N.toLocaleString() + " logs";
+
+  const deltas=[];
+  for(let i=1;i<vis.length;i++){ const d=vis[i].t-vis[i-1].t; if(d>0) deltas.push(d); }
+  const tau = median(deltas) || 1;
+  const bf = +breakEl.value;
+  const zoom = +zoomEl.value;
+  const uniform = modeEl.value === "uniform";
+  const GAP_MIN = 2, GAP_MAX = 130;
+
+  items = [];
+  let y = 6, prevT = null;
+  for(const e of vis){
+    const dt = prevT===null ? 0 : e.t - prevT;
+    if(prevT!==null){
+      const doBreak = bf>0 && dt > bf*tau && dt > 0;
+      if(doBreak){
+        items.push({br:dt, y}); y += BREAK_H + 4;
+      }else if(uniform){
+        y += 6;
+      }else if(dt>0){
+        y += Math.min(GAP_MAX, GAP_MIN + Math.log10(1 + dt/tau) * zoom);
+      }else{
+        y += GAP_MIN;
+      }
+    }
+    items.push({e, y, dt, first: prevT===null});
+    y += ROW_H;
+    prevT = e.t;
+  }
+  body.style.height = (y + 30) + "px";
+  winA=-1; winB=-2;
+  renderWindow(true);
+}
+
+function findIdx(yy){
+  let lo=0, hi=items.length;
+  while(lo<hi){ const m=(lo+hi)>>1; if(items[m].y < yy) lo=m+1; else hi=m; }
+  return Math.max(0, lo-1);
+}
+
+function renderWindow(force){
+  if(!items.length){ body.replaceChildren(); winA=-1; winB=-2; return; }
+  const top = body.getBoundingClientRect().top;
+  const vh = window.innerHeight || 800;
+  const lo = -top - BUF, hi = -top + vh + BUF;
+  let a = findIdx(lo);
+  let b = a;
+  while(b < items.length-1 && items[b+1].y <= hi) b++;
+  if(!force && a===winA && b===winB) return;
+  winA=a; winB=b;
+  const frag = document.createDocumentFragment();
+  for(let i=a;i<=b;i++) frag.appendChild(makeNode(items[i]));
+  body.replaceChildren(frag);
+}
+
+function makeNode(it){
+  if(it.br !== undefined){
+    const br = document.createElement("div");
+    br.className = "break";
+    br.style.top = it.y + "px";
+    br.innerHTML = '<span class="line"></span><span class="lbl">≈ '
+                 + esc(fmtDur(it.br)) + ' 経過</span><span class="line"></span>';
+    return br;
+  }
+  const e = it.e, id = ids[e.ii];
+  const row = document.createElement("div");
+  row.className = "row";
+  row.style.gridTemplateColumns = gridCols;
+  row.style.top = it.y + "px";
+
+  const gut = document.createElement("div");
+  gut.className = "gut";
+  gut.innerHTML = '<span class="abs">' + esc(fmtAbs(e.t)) + '</span>'
+    + '<span class="dlt">' + (it.first ? "#"+e.n : "+" + esc(fmtDur(it.dt))) + '</span>';
+  row.appendChild(gut);
+
+  const cell = document.createElement("div");
+  cell.className = "cell";
+  cell.style.gridColumn = (laneIdx[e._lane] + 2);
+  const chip = document.createElement("span");
+  chip.className = "evt lv-" + id.level + (selKey===e.n ? " sel" : "");
+  chip.style.borderLeftColor = id.color;
+  chip.innerHTML = '<span class="nm" style="color:'+id.color+'">'+esc(id.name)+'</span>'
+                 + (e.msg ? '<span class="msg">'+esc(e.msg)+'</span>' : "");
+  chip.onclick = ()=>showDetail(e, id, chip);
+  cell.appendChild(chip);
+  row.appendChild(cell);
+  return row;
+}
+
+window.addEventListener("scroll", rafRender, {passive:true});
+window.addEventListener("resize", rafRender);
+const raf_ = window.requestAnimationFrame ? window.requestAnimationFrame.bind(window)
+            : (f)=>setTimeout(f,16);
+let raf=0;
+function rafRender(){ if(raf) return;
+  raf = raf_(()=>{ raf=0; renderWindow(false); }); }
+
+/* ---------- 詳細パネル ---------- */
+const dp = document.getElementById("dpanel");
+document.getElementById("dpClose").onclick = ()=>{
+  dp.style.display="none"; selKey=null; renderWindow(true); };
+function showDetail(e, id, chip){
+  selKey = e.n;
+  document.querySelectorAll(".evt.sel").forEach(c=>c.classList.remove("sel"));
+  chip.classList.add("sel");
+  document.getElementById("dpTitle").textContent = "#" + e.n + "  " + id.name;
+  let rows = '<tr><td>time</td><td>'+esc(fmtAbs(e.t))+' (T+'+esc(fmtDur(e.t))+')</td></tr>'
+    + '<tr><td>id</td><td>'+esc(id.key)+' ('+esc(id.level)+')</td></tr>'
+    + '<tr><td>lane</td><td>'+esc(e._lane)+'</td></tr>'
+    + (e.msg ? '<tr><td>message</td><td>'+esc(e.msg)+'</td></tr>' : "");
+  for(const k in e.d){
+    const raw = e.d[k][0], disp = e.d[k][1];
+    const extra = (String(raw)!==String(disp))
+      ? '  <span style="color:#8b9aa8">(raw: '+esc(raw)+')</span>' : "";
+    rows += '<tr><td>'+esc(k)+'</td><td>'+esc(disp)+extra+'</td></tr>';
+  }
+  document.getElementById("dpBody").innerHTML = '<table>'+rows+'</table>';
+  dp.style.display = "block";
+}
+
+layout();
+})();
+</script>
+</body>
+</html>
